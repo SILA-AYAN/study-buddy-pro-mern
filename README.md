@@ -20,7 +20,14 @@ The application supports user authentication and task management through a RESTf
 - Create, update, delete tasks  
 - Kanban board (To Do / Doing / Done)  
 - Dockerized development environment  
-- Production setup with Nginx reverse proxy  
+- Production setup with Nginx reverse proxy
+
+## URLs
+  Frontend: http://localhost:5173
+  Backend:  http://localhost:5000
+
+## Stop Containers
+  docker compose down
 
 ## Docker (Development)
 
@@ -33,12 +40,9 @@ Open a terminal in the project root directory (where `backend` and `frontend` fo
 ```bash
 docker compose up --build
 
-## URLs
-  Frontend: http://localhost:5173
-  Backend:  http://localhost:5000
 
-## Stop Containers
-  docker compose down
+
+
 
 
 
