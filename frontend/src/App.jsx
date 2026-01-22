@@ -1,7 +1,10 @@
+import { Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+
 import { useEffect, useMemo, useState } from "react";
 
-const API_BASE = "/api";
-
+const API_BASE = "/api"; // Nginx proxy + dev proxy için doğru
 
 const statusStyles = {
   todo: {
@@ -37,7 +40,13 @@ function formatDate(iso) {
   }
 }
 
-export default function App() {
+function RequireAuth({ children }) {
+  const token = localStorage.getItem("token");
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function Dashboard() {
   const [tasks, setTasks] = useState([]);
   const [health, setHealth] = useState({ ok: false, text: "Checking..." });
 
@@ -47,6 +56,17 @@ export default function App() {
 
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState("");
+
+  const token = localStorage.getItem("token");
+
+  // Helper: authorized fetch
+  async function authFetch(path, options = {}) {
+    const headers = {
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+    };
+    return fetch(`${API_BASE}${path}`, { ...options, headers });
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -66,9 +86,15 @@ export default function App() {
     return map;
   }, [filtered]);
 
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(""), 1800);
+  }
+
   async function fetchHealth() {
     try {
-      const res = await fetch(`${API_BASE}/api/health`);
+      // Health endpoint should NOT require auth (recommended). If yours requires auth, change to authFetch("/health")
+      const res = await fetch(`${API_BASE}/health`);
       const data = await res.json();
       setHealth({ ok: true, text: `${data.status} - ${data.message}` });
     } catch {
@@ -77,7 +103,13 @@ export default function App() {
   }
 
   async function fetchTasks() {
-    const res = await fetch(`${API_BASE}/api/tasks`);
+    const res = await authFetch("/tasks");
+    if (res.status === 401) {
+      // token invalid/expired
+      localStorage.removeItem("token");
+      window.location.href = "/login";
+      return;
+    }
     const data = await res.json();
     setTasks(Array.isArray(data) ? data : []);
   }
@@ -85,12 +117,8 @@ export default function App() {
   useEffect(() => {
     fetchHealth();
     fetchTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  function showToast(msg) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 1800);
-  }
 
   async function addTask() {
     const clean = title.trim();
@@ -103,7 +131,7 @@ export default function App() {
       status: "todo",
     };
 
-    const res = await fetch(`${API_BASE}/api/tasks`, {
+    const res = await authFetch("/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -121,7 +149,7 @@ export default function App() {
   }
 
   async function removeTask(id) {
-    const res = await fetch(`${API_BASE}/api/tasks/${id}`, { method: "DELETE" });
+    const res = await authFetch(`/tasks/${id}`, { method: "DELETE" });
     if (!res.ok) {
       showToast("Delete failed");
       return;
@@ -131,11 +159,14 @@ export default function App() {
   }
 
   async function updateTask(id, patch) {
-    const res = await fetch(`${API_BASE}/api/tasks/${id}`, {
+    // Your backend route uses PUT in my earlier version.
+    // If your backend uses PATCH, change method to "PATCH" here.
+    const res = await authFetch(`/tasks/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
+
     if (!res.ok) {
       showToast("Update failed");
       return;
@@ -193,6 +224,18 @@ export default function App() {
                   Done: <b>{stats.done}</b>
                 </span>
               </span>
+
+              {/* Logout */}
+              <button
+                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-white hover:bg-slate-800"
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem("token");
+                  window.location.href = "/login";
+                }}
+              >
+                Logout
+              </button>
             </div>
           </div>
 
@@ -277,7 +320,6 @@ export default function App() {
         {/* Board */}
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {["todo", "doing", "done"].map((status) => (
-
             <div
               key={status}
               className={`rounded-2xl bg-white p-4 shadow-sm ring-1 ${statusStyles[status].ring}`}
@@ -286,7 +328,9 @@ export default function App() {
                 <h2 className="text-lg font-bold text-slate-900">
                   {statusStyles[status].title}
                 </h2>
-                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusStyles[status].chip}`}>
+                <span
+                  className={`rounded-full px-2 py-1 text-xs font-semibold ${statusStyles[status].chip}`}
+                >
                   {byStatus[status].length}
                 </span>
               </div>
@@ -389,5 +433,25 @@ export default function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <Dashboard />
+          </RequireAuth>
+        }
+      />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
