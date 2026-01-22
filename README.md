@@ -37,7 +37,6 @@ The application supports user authentication and task management through a RESTf
 ### Run the project with Docker
 Open a terminal in the project root directory (where `backend` and `frontend` folders are located) and run:
 
-```bash
 docker compose up --build
 
 
